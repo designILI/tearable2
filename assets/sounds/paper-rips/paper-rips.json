@@ -1,0 +1,70 @@
+{
+  "source": "freesound_community-ripping-paper-98849.mp3",
+  "sampleRate": 44100,
+  "format": "wav pcm_s16le mono",
+  "clips": [
+    {
+      "file": "paper-rip-01-long-grain.wav",
+      "label": "long grain rip",
+      "start": 1.375,
+      "end": 1.99,
+      "duration": 0.615
+    },
+    {
+      "file": "paper-rip-02-tiny-snap.wav",
+      "label": "tiny snap",
+      "start": 2.815,
+      "end": 3.02,
+      "duration": 0.205
+    },
+    {
+      "file": "paper-rip-03-medium-tear.wav",
+      "label": "medium tear",
+      "start": 3.195,
+      "end": 3.7,
+      "duration": 0.505
+    },
+    {
+      "file": "paper-rip-04-rough-pull.wav",
+      "label": "rough pull",
+      "start": 3.905,
+      "end": 4.7,
+      "duration": 0.795
+    },
+    {
+      "file": "paper-rip-05-short-tick.wav",
+      "label": "short tick",
+      "start": 5.525,
+      "end": 5.69,
+      "duration": 0.165
+    },
+    {
+      "file": "paper-rip-06-dry-crack.wav",
+      "label": "dry crack",
+      "start": 6.045,
+      "end": 6.21,
+      "duration": 0.165
+    },
+    {
+      "file": "paper-rip-07-stutter-rip.wav",
+      "label": "stutter rip",
+      "start": 6.505,
+      "end": 7.09,
+      "duration": 0.585
+    },
+    {
+      "file": "paper-rip-08-soft-tear.wav",
+      "label": "soft tear",
+      "start": 8.795,
+      "end": 9.11,
+      "duration": 0.315
+    },
+    {
+      "file": "paper-rip-09-end-flick.wav",
+      "label": "end flick",
+      "start": 11.155,
+      "end": 11.35,
+      "duration": 0.195
+    }
+  ]
+}

@@ -3,21 +3,32 @@ import * as THREE from "https://unpkg.com/three@0.164.1/build/three.module.js";
 const canvas = document.querySelector("#artCanvas");
 const resetButton = document.querySelector("#resetButton");
 const layerStatus = document.querySelector("#layerStatus");
-const tearSoundUrl = "assets/sounds/ripping-paper.mp3";
-const tearSliceStarts = [0.35, 0.8, 1.2, 1.75, 2.4, 3.1, 3.8, 4.6, 5.4, 6.2, 7.1, 8, 8.9, 9.8, 10.7, 11.3];
-const fallbackFinalTearSound = new Audio(tearSoundUrl);
-const fallbackScratchTearSounds = Array.from({ length: 5 }, () => new Audio(tearSoundUrl));
-fallbackFinalTearSound.preload = "auto";
-fallbackScratchTearSounds.forEach((sound) => {
+const scratchTearSoundUrls = [
+  "assets/sounds/paper-rips/paper-rip-02-tiny-snap.wav",
+  "assets/sounds/paper-rips/paper-rip-05-short-tick.wav",
+  "assets/sounds/paper-rips/paper-rip-06-dry-crack.wav",
+  "assets/sounds/paper-rips/paper-rip-09-end-flick.wav",
+];
+const finalTearSoundUrls = [
+  "assets/sounds/paper-rips/paper-rip-01-long-grain.wav",
+  "assets/sounds/paper-rips/paper-rip-03-medium-tear.wav",
+  "assets/sounds/paper-rips/paper-rip-04-rough-pull.wav",
+  "assets/sounds/paper-rips/paper-rip-07-stutter-rip.wav",
+  "assets/sounds/paper-rips/paper-rip-08-soft-tear.wav",
+];
+const fallbackScratchTearSounds = scratchTearSoundUrls.map((url) => new Audio(url));
+const fallbackFinalTearSounds = finalTearSoundUrls.map((url) => new Audio(url));
+[...fallbackScratchTearSounds, ...fallbackFinalTearSounds].forEach((sound) => {
   sound.preload = "auto";
+  sound.load();
 });
-fallbackFinalTearSound.load();
-fallbackScratchTearSounds.forEach((sound) => sound.load());
 const tearAudioState = {
   context: null,
-  buffer: null,
+  scratchBuffers: [],
+  finalBuffers: [],
   loading: null,
   scratchIndex: 0,
+  finalIndex: 0,
   lastScratchAt: 0,
   scratchDistance: 0,
 };
@@ -605,6 +616,7 @@ function playScratchTearSound(distance) {
   tearAudioState.scratchDistance = 0;
 
   playTearSlice({
+    type: "scratch",
     duration: 0.16 + Math.random() * 0.08,
     volume: 0.12 + Math.random() * 0.06,
     rate: 0.9 + Math.random() * 0.28,
@@ -613,6 +625,7 @@ function playScratchTearSound(distance) {
 
 function playFinalTearSound() {
   playTearSlice({
+    type: "final",
     duration: 0.46 + Math.random() * 0.16,
     volume: 0.24,
     rate: 0.94 + Math.random() * 0.1,
@@ -639,46 +652,71 @@ function initializeTearAudio() {
 }
 
 function loadTearBuffer() {
-  if (tearAudioState.buffer || tearAudioState.loading || !tearAudioState.context) return;
+  if (tearAudioState.loading || !tearAudioState.context) return;
+  if (tearAudioState.scratchBuffers.length && tearAudioState.finalBuffers.length) return;
 
-  tearAudioState.loading = fetch(tearSoundUrl)
-    .then((response) => response.arrayBuffer())
-    .then((data) => tearAudioState.context.decodeAudioData(data))
-    .then((buffer) => {
-      tearAudioState.buffer = buffer;
+  const loadClip = (url) =>
+    fetch(url)
+      .then((response) => response.arrayBuffer())
+      .then((data) => tearAudioState.context.decodeAudioData(data));
+
+  tearAudioState.loading = Promise.all([
+    Promise.all(scratchTearSoundUrls.map(loadClip)),
+    Promise.all(finalTearSoundUrls.map(loadClip)),
+  ])
+    .then(([scratchBuffers, finalBuffers]) => {
+      tearAudioState.scratchBuffers = scratchBuffers;
+      tearAudioState.finalBuffers = finalBuffers;
     })
     .catch(() => {
       tearAudioState.loading = null;
     });
 }
 
-function playTearSlice({ duration, volume, rate }) {
+function playTearSlice({ type, duration, volume, rate }) {
   const context = tearAudioState.context;
-  const buffer = tearAudioState.buffer;
-  if (!context || !buffer || context.state !== "running") {
-    playFallbackTearSlice({ duration, volume, rate });
+  const buffers = type === "final" ? tearAudioState.finalBuffers : tearAudioState.scratchBuffers;
+  if (!context || context.state !== "running") {
+    playFallbackTearSlice({ type, duration, volume, rate });
+    return;
+  }
+
+  const buffer = pickTearBuffer(buffers, type);
+  if (!buffer) {
+    playFallbackTearSlice({ type, duration, volume, rate });
     return;
   }
 
   const source = context.createBufferSource();
   const gain = context.createGain();
-  const offset = pickTearSliceOffset(buffer.duration, duration);
+  const playDuration = Math.min(duration, buffer.duration);
   const now = context.currentTime;
 
   source.buffer = buffer;
   source.playbackRate.value = rate;
   gain.gain.setValueAtTime(0.0001, now);
   gain.gain.exponentialRampToValueAtTime(volume, now + 0.012);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + playDuration);
   source.connect(gain).connect(context.destination);
-  source.start(now, offset, duration);
+  source.start(now, 0, playDuration);
 }
 
-function playFallbackTearSlice({ duration, volume, rate }) {
-  const sound = duration > 0.3 ? fallbackFinalTearSound : fallbackScratchTearSounds[tearAudioState.scratchIndex];
-  tearAudioState.scratchIndex = (tearAudioState.scratchIndex + 1) % fallbackScratchTearSounds.length;
+function pickTearBuffer(buffers, type) {
+  if (!buffers.length) return null;
+  const indexKey = type === "final" ? "finalIndex" : "scratchIndex";
+  const buffer = buffers[tearAudioState[indexKey] % buffers.length];
+  tearAudioState[indexKey] = (tearAudioState[indexKey] + 1) % buffers.length;
+  return buffer;
+}
+
+function playFallbackTearSlice({ type, duration, volume, rate }) {
+  const sounds = type === "final" ? fallbackFinalTearSounds : fallbackScratchTearSounds;
+  if (!sounds.length) return;
+  const indexKey = type === "final" ? "finalIndex" : "scratchIndex";
+  const sound = sounds[tearAudioState[indexKey] % sounds.length];
+  tearAudioState[indexKey] = (tearAudioState[indexKey] + 1) % sounds.length;
   sound.pause();
-  sound.currentTime = pickTearSliceOffset(12.24, duration);
+  sound.currentTime = 0;
   sound.volume = Math.min(volume, 0.3);
   sound.playbackRate = rate;
   sound
@@ -687,12 +725,6 @@ function playFallbackTearSlice({ duration, volume, rate }) {
       window.setTimeout(() => sound.pause(), duration * 1000 + 80);
     })
     .catch(() => {});
-}
-
-function pickTearSliceOffset(sourceDuration, sliceDuration) {
-  const usableStarts = tearSliceStarts.filter((start) => start + sliceDuration < sourceDuration - 0.05);
-  if (!usableStarts.length) return 0;
-  return usableStarts[Math.floor(Math.random() * usableStarts.length)];
 }
 
 function updatePeelTransition() {
